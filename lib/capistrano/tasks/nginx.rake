@@ -9,7 +9,7 @@ namespace :nginx do
           set :nginx_upstream, -> { fetch(:application) }
           set :nginx_server_name, -> { fetch(:application) }
           set :nginx_template, "config/deploy/nginx_conf.erb"
-    DESC
+  DESC
   task :setup do
     invoke :'nginx:create_config'
     invoke :'nginx:enable_site'
@@ -26,7 +26,7 @@ namespace :nginx do
     end
   end
 
-  [:stop, :start, :restart, :reload, :'force-reload'].each do |action|
+  [:stop, :start, :restart, :'force-reload'].each do |action|
     desc "#{action.to_s.capitalize} nginx"
     task action do
       on roles fetch(:nginx_roles) do
@@ -35,12 +35,27 @@ namespace :nginx do
     end
   end
 
+  desc "reload nginx"
+  task :reload do
+    on roles(fetch(:nginx_roles)), in: fetch(:nginx_reload_runner) do
+      within release_path do
+        instance_eval(fetch(:nginx_pre_reload_block))
+      end
+
+      sudo :service, "nginx", 'reload'
+
+      within release_path do
+        instance_eval(fetch(:nginx_post_reload_block))
+      end
+    end
+  end
+
   desc 'Enable nginx site'
   task :enable_site do
     on roles fetch(:nginx_roles) do
       execute :ln, "-sf",
-        "#{fetch(:nginx_path)}/sites-available/#{fetch(:application)}.conf",
-        "#{fetch(:nginx_path)}/sites-enabled/#{fetch(:application)}.conf"
+              "#{fetch(:nginx_path)}/sites-available/#{fetch(:application)}.conf",
+              "#{fetch(:nginx_path)}/sites-enabled/#{fetch(:application)}.conf"
     end
     invoke :'nginx:reload'
   end
@@ -59,6 +74,9 @@ namespace :load do
   task :defaults do
     set :nginx_roles, :all
     set :nginx_path, "/etc/nginx"
+    set :nginx_reload_runner, :parallel
+    set(:nginx_pre_reload_block) {''}
+    set(:nginx_post_reload_block) {''}
     set :nginx_upstream, -> { fetch(:application) }
     set :nginx_server_name, -> { fetch(:application) }
     set :nginx_template, "config/deploy/nginx_conf.erb"
